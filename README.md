@@ -4,6 +4,8 @@
 
 **사이트:** https://hyeseon-cpu.github.io/QRmake/
 
+![QR 코드 생성기 화면](docs/screenshot.png)
+
 ## 기능
 
 - 링크를 한 줄에 하나씩 입력하면 QR 코드를 한 번에 생성
