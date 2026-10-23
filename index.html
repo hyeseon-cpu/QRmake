@@ -194,6 +194,70 @@ button:active {
   max-width: 100%;
 }
 
+.qr-item canvas.transparent {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.qr-item .transparent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.qr-item input[type="color"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.logo-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.logo-row input[type="file"] {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+#logo-clear-btn {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#logo-clear-btn:hover {
+  background: #e5e7eb;
+}
+
+#logo-clear-btn.hidden {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .options {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .qr-item .color-row {
   display: flex;
   gap: 8px;
@@ -267,6 +331,21 @@ button:active {
             <option value="500">500 x 500</option>
           </select>
         </div>
+        <div class="option">
+          <label for="logo-input">가운데 로고 (선택)</label>
+          <div class="logo-row">
+            <input type="file" id="logo-input" accept="image/*">
+            <button id="logo-clear-btn" class="hidden" type="button">로고 삭제</button>
+          </div>
+        </div>
+        <div class="option">
+          <label for="logo-size">로고 크기</label>
+          <select id="logo-size">
+            <option value="0.2">작게</option>
+            <option value="0.25" selected>보통</option>
+            <option value="0.3">크게</option>
+          </select>
+        </div>
       </div>
 
       <button id="generate-btn">QR 코드 생성</button>
@@ -300,8 +379,12 @@ const resultsHeader = document.getElementById("results-header");
 const resultsCount = document.getElementById("results-count");
 const results = document.getElementById("results");
 const errorMsg = document.getElementById("error-msg");
+const logoInput = document.getElementById("logo-input");
+const logoClearBtn = document.getElementById("logo-clear-btn");
+const logoSizeInput = document.getElementById("logo-size");
 
 let items = [];
+let logoImage = null;
 
 function showError(message) {
   errorMsg.textContent = message;
@@ -316,23 +399,61 @@ function clearError() {
 }
 
 function renderItem(item) {
+  item.canvas.classList.toggle("transparent", item.transparent);
   QRCode.toCanvas(
     item.canvas,
     item.url,
     {
       width: item.size,
       margin: 2,
+      // 로고가 가리는 부분이 있어도 읽히도록 오류 복원 수준을 최대로
+      errorCorrectionLevel: logoImage ? "H" : "M",
       color: {
         dark: item.fg,
-        light: item.bg,
+        light: item.transparent ? "#00000000" : item.bg,
       },
     },
     (err) => {
       if (err) {
         item.canvas.replaceWith(document.createTextNode("생성 실패"));
+        return;
       }
+      if (logoImage) drawLogo(item);
     }
   );
+}
+
+function drawLogo(item) {
+  const canvas = item.canvas;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const plate = Math.round(w * parseFloat(logoSizeInput.value));
+  const pad = Math.round(plate * 0.1);
+  const px = (w - plate) / 2;
+
+  // 로고 뒤 QR 모듈을 비워서 로고가 깔끔하게 보이게
+  if (item.transparent) {
+    ctx.clearRect(px, px, plate, plate);
+  } else {
+    ctx.fillStyle = item.bg;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(px, px, plate, plate, plate * 0.15);
+    } else {
+      ctx.rect(px, px, plate, plate);
+    }
+    ctx.fill();
+  }
+
+  const box = plate - pad * 2;
+  const scale = Math.min(box / logoImage.naturalWidth, box / logoImage.naturalHeight);
+  const lw = logoImage.naturalWidth * scale;
+  const lh = logoImage.naturalHeight * scale;
+  ctx.drawImage(logoImage, (w - lw) / 2, (w - lh) / 2, lw, lh);
+}
+
+function renderAll() {
+  items.forEach(renderItem);
 }
 
 // claude.ai 아티팩트에서는 downloads 기능으로 저장하고, 로컬에서는 기존 링크 방식 사용
@@ -402,7 +523,7 @@ function generateAll() {
   results.innerHTML = "";
   items = lines.map((line, index) => {
     const { label, url } = parseLine(line);
-    return { label, url, index, fg: "#000000", bg: "#ffffff", size };
+    return { label, url, index, fg: "#000000", bg: "#ffffff", transparent: false, size };
   });
 
   items.forEach((item) => {
@@ -459,6 +580,18 @@ function generateAll() {
     colorRow.appendChild(fgField);
     colorRow.appendChild(bgField);
 
+    const transparentToggle = document.createElement("label");
+    transparentToggle.className = "transparent-toggle";
+    const transparentInput = document.createElement("input");
+    transparentInput.type = "checkbox";
+    transparentInput.addEventListener("change", () => {
+      item.transparent = transparentInput.checked;
+      bgInput.disabled = item.transparent;
+      renderItem(item);
+    });
+    transparentToggle.appendChild(transparentInput);
+    transparentToggle.appendChild(document.createTextNode("배경 투명 (PNG)"));
+
     const downloadBtn = document.createElement("button");
     downloadBtn.className = "download-btn";
     downloadBtn.textContent = "PNG 다운로드";
@@ -470,6 +603,7 @@ function generateAll() {
     el.appendChild(urlText);
     el.appendChild(canvas);
     el.appendChild(colorRow);
+    el.appendChild(transparentToggle);
     el.appendChild(downloadBtn);
     results.appendChild(el);
 
@@ -498,6 +632,36 @@ async function downloadAll() {
     }, i * 300);
   });
 }
+
+logoInput.addEventListener("change", () => {
+  const file = logoInput.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    if (logoImage) URL.revokeObjectURL(logoImage.src);
+    logoImage = img;
+    logoClearBtn.classList.remove("hidden");
+    renderAll();
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(img.src);
+    logoInput.value = "";
+    alert("이미지를 불러올 수 없어요. 다른 파일을 선택해주세요.");
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+logoClearBtn.addEventListener("click", () => {
+  if (logoImage) URL.revokeObjectURL(logoImage.src);
+  logoImage = null;
+  logoInput.value = "";
+  logoClearBtn.classList.add("hidden");
+  renderAll();
+});
+
+logoSizeInput.addEventListener("change", () => {
+  if (logoImage) renderAll();
+});
 
 generateBtn.addEventListener("click", generateAll);
 downloadAllBtn.addEventListener("click", downloadAll);
