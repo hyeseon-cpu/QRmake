@@ -346,6 +346,13 @@ button:active {
             <option value="0.3">크게</option>
           </select>
         </div>
+        <div class="option">
+          <label for="logo-shape">로고 모양</label>
+          <select id="logo-shape">
+            <option value="square" selected>네모</option>
+            <option value="circle">동그라미</option>
+          </select>
+        </div>
       </div>
 
       <button id="generate-btn">QR 코드 생성</button>
@@ -382,6 +389,7 @@ const errorMsg = document.getElementById("error-msg");
 const logoInput = document.getElementById("logo-input");
 const logoClearBtn = document.getElementById("logo-clear-btn");
 const logoSizeInput = document.getElementById("logo-size");
+const logoShapeInput = document.getElementById("logo-shape");
 
 let items = [];
 let logoImage = null;
@@ -430,25 +438,36 @@ function drawLogo(item) {
   const plate = Math.round(w * parseFloat(logoSizeInput.value));
   const pad = Math.round(plate * 0.1);
   const px = (w - plate) / 2;
+  const circle = logoShapeInput.value === "circle";
 
   // 로고 뒤 QR 모듈을 비워서 로고가 깔끔하게 보이게
+  ctx.save();
+  ctx.beginPath();
+  if (circle) {
+    ctx.arc(w / 2, w / 2, plate / 2, 0, Math.PI * 2);
+  } else if (ctx.roundRect) {
+    ctx.roundRect(px, px, plate, plate, plate * 0.15);
+  } else {
+    ctx.rect(px, px, plate, plate);
+  }
   if (item.transparent) {
-    ctx.clearRect(px, px, plate, plate);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "#000";
   } else {
     ctx.fillStyle = item.bg;
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(px, px, plate, plate, plate * 0.15);
-    } else {
-      ctx.rect(px, px, plate, plate);
-    }
-    ctx.fill();
   }
+  ctx.fill();
+  ctx.restore();
 
   const box = plate - pad * 2;
-  const scale = Math.min(box / logoImage.naturalWidth, box / logoImage.naturalHeight);
-  const lw = logoImage.naturalWidth * scale;
-  const lh = logoImage.naturalHeight * scale;
+  const nw = logoImage.naturalWidth;
+  const nh = logoImage.naturalHeight;
+  // 동그라미일 때는 로고 대각선이 원 안에 들어가도록 맞춤
+  const scale = circle
+    ? box / Math.hypot(nw, nh)
+    : Math.min(box / nw, box / nh);
+  const lw = nw * scale;
+  const lh = nh * scale;
   ctx.drawImage(logoImage, (w - lw) / 2, (w - lh) / 2, lw, lh);
 }
 
@@ -660,6 +679,10 @@ logoClearBtn.addEventListener("click", () => {
 });
 
 logoSizeInput.addEventListener("change", () => {
+  if (logoImage) renderAll();
+});
+
+logoShapeInput.addEventListener("change", () => {
   if (logoImage) renderAll();
 });
 
