@@ -435,20 +435,33 @@ function drawLogo(item) {
   const canvas = item.canvas;
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
-  const plate = Math.round(w * parseFloat(logoSizeInput.value));
-  const pad = Math.round(plate * 0.1);
-  const px = (w - plate) / 2;
+  const box = w * parseFloat(logoSizeInput.value) * 0.8;
+  const gap = Math.max(2, Math.round(w * 0.015));
   const circle = logoShapeInput.value === "circle";
+  const nw = logoImage.naturalWidth;
+  const nh = logoImage.naturalHeight;
+  // 동그라미일 때는 로고 대각선이 원 안에 들어가도록 맞춤
+  const scale = circle
+    ? box / Math.hypot(nw, nh)
+    : Math.min(box / nw, box / nh);
+  const lw = nw * scale;
+  const lh = nh * scale;
 
-  // 로고 뒤 QR 모듈을 비워서 로고가 깔끔하게 보이게
+  // 로고 바로 주변의 QR 모듈만 비워서 로고가 깔끔하게 보이게
   ctx.save();
   ctx.beginPath();
   if (circle) {
-    ctx.arc(w / 2, w / 2, plate / 2, 0, Math.PI * 2);
-  } else if (ctx.roundRect) {
-    ctx.roundRect(px, px, plate, plate, plate * 0.15);
+    ctx.arc(w / 2, w / 2, Math.hypot(lw, lh) / 2 + gap, 0, Math.PI * 2);
   } else {
-    ctx.rect(px, px, plate, plate);
+    const hw = lw + gap * 2;
+    const hh = lh + gap * 2;
+    const hx = (w - hw) / 2;
+    const hy = (w - hh) / 2;
+    if (ctx.roundRect) {
+      ctx.roundRect(hx, hy, hw, hh, Math.min(hw, hh) * 0.15);
+    } else {
+      ctx.rect(hx, hy, hw, hh);
+    }
   }
   if (item.transparent) {
     ctx.globalCompositeOperation = "destination-out";
@@ -459,15 +472,6 @@ function drawLogo(item) {
   ctx.fill();
   ctx.restore();
 
-  const box = plate - pad * 2;
-  const nw = logoImage.naturalWidth;
-  const nh = logoImage.naturalHeight;
-  // 동그라미일 때는 로고 대각선이 원 안에 들어가도록 맞춤
-  const scale = circle
-    ? box / Math.hypot(nw, nh)
-    : Math.min(box / nw, box / nh);
-  const lw = nw * scale;
-  const lh = nh * scale;
   ctx.drawImage(logoImage, (w - lw) / 2, (w - lh) / 2, lw, lh);
 }
 
